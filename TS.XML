@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<sequence version="3.00" name="Custom Task Sequence" description="MDT Simulator">
+  <step type="BDD_InstallApplication" name="Launching PowerShell with TS Environment Variables" description="" disable="false" continueOnError="false" runIn="WinPEandFullOS" successCodeList="0 3010">
+    <defaultVarList>
+      <variable name="ApplicationGUID" property="ApplicationGUID"></variable>
+      <variable name="ApplicationSuccessCodes" property="ApplicationSuccessCodes">0 3010</variable>
+    </defaultVarList>
+    <action>"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\Microsoft.BDD.TaskSequenceModule\Microsoft.BDD.TaskSequencePSHost40.exe" "C:\MDTSimulator\NewPSConsole.ps1" "C:\MININT\SMSOSD\OSDLOGS"</action>
+  </step>
+</sequence>
