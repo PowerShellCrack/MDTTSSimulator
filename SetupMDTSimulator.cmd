@@ -34,6 +34,7 @@ copy /y "%MDTSourceFiles%\Scripts\ZTIUtility.vbs" "%INSTALLPATH%"
 REM Custom Files
 copy /y "%~dp0CustomSettings.ini" "%INSTALLPATH%"
 copy /y "%~dp0TS.XML" "%INSTALLPATH%"
+copy /y "%~dp0TSEnv.ps1" "%INSTALLPATH%"
 copy /y "%~dp0NewPSConsole.ps1" "%INSTALLPATH%"
 copy /y "%~dp0RunMDTSimulator.cmd" "%INSTALLPATH%"
 copy /y "%~dp0MDT Simulator.lnk" "%systemdrive%\Users\Public\desktop"
