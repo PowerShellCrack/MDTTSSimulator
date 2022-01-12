@@ -1,4 +1,5 @@
-$MDTShare = "\\localhost\deploymentshare$"
+$MDTShare = "\\Server\deploymentshare"
+
 
 $host.UI.RawUI.WindowTitle = "MDT Simulator Terminal"
 cls
