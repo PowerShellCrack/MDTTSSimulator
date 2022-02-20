@@ -13,7 +13,7 @@ Param(
 
     [parameter(Mandatory=$false)]
     [ValidateSet('Powershell','ISE','VSCode')]
-    [string]$Environment = 'Powershell'        
+    [string]$Environment = 'ISE'        
 )
 
 
@@ -189,38 +189,36 @@ Function Set-WindowPosition {
     }
 }
 
-
 ##=============================
 ## MAIN
 ##=============================
 #stop an Task Sequence process
 Get-Process TS* | Stop-Process -Force
 
+#if any previous MDT process ran, remove it
+Remove-Item -Path C:\MININT -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+
 #check for MDT simulator and ZTI module are installed
 If( (Test-Path $MDTSimulatorPath) -and (Get-Module -ListAvailable -Name ZTIUtility) )
 {
+    
+    
     Import-Module ZTIutility
-
-    #if any previous MDT process ran, remove it
-    Remove-Item -Path C:\MININT -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
-
+    
     Write-Host "Starting MDT Simulation..." -ForegroundColor Green
     switch($Mode){
 
         'MDT' {
-                cscript "$MDTSimulatorPath\ZTIGather.wsf" /debug:true
+                . "$MDTSimulatorPath\Gather.ps1"
         }
         'PSD'{
-                Push-Location $MDTSimulatorPath
-                . "$MDTSimulatorPath\PSDGather.ps1"
-                #Get-ChildItem "$MDTSimulatorPath\Modules" -Recurse -Filter *.psm1 | Sort -Descending | ForEach-Object {Import-Module $_.FullName -ErrorAction SilentlyContinue | Out-Null}
+                . "$MDTSimulatorPath\PSDGather.ps1" -Path "$Deploymentshare\Tools\Modules"
                 Pop-Location
         }
     }
-    #grab console script called by TS.xml
-    $TSConsoleScript = Get-content "$MDTSimulatorPath\OpenEditor.ps1"
 
-    #grab TSscript called by NePSConsole.ps1
+    
+    #grab TSscript called by PSConsole.ps1
     $TSStartupScript = Get-Content "$MDTSimulatorPath\TSEnv.ps1"
 
     #change the path to the deploymentshare in the TSenv.ps1 file (cannot be called as argument)
@@ -231,50 +229,48 @@ If( (Test-Path $MDTSimulatorPath) -and (Get-Module -ListAvailable -Name ZTIUtili
 
     switch($Environment){
         'Powershell' {
-                        #$Command = "Start-Process `"C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.exe`" -ArgumentList `"-noexit -noprofile -file C:\MDTSimulator\TSEnv.ps1`" ï¿½Wait" | Set-Content "$MDTSimulatorPath\OpenEditor.ps1"
+
                         $ProcessPath = "C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.exe"
                         $ProcessArgument="$MDTSimulatorPath\TSEnv.ps1"
-
-                        #replace content with path to TSenv.ps1
-                        ($TSConsoleScript).replace("C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.exe",$ProcessPath).replace("C:\MDTSimulator\TSEnv.ps1",$ProcessArgument) |
-                                    Set-Content "$MDTSimulatorPath\OpenEditor.ps1"
 
                         #detection for process window
                         $Window = "MDT Simulator Terminal"
                         $sleep = 5
                         }
+
         'ISE'        {
                         $ProcessPath = "C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell_ISE.exe"
                         $ProcessArgument="$MDTSimulatorPath\TSEnv.ps1"
-
-                        #replace content with ISE process and path to TSenv.ps1
-                        ($TSConsoleScript).replace("C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.exe",$ProcessPath).replace("-noexit -noprofile -file C:\MDTSimulator\TSEnv.ps1",$ProcessArgument) |
-                                    Set-Content "$MDTSimulatorPath\OpenEditor.ps1"
 
                         #detection for process window
                         $Window = "MDT Simulator Terminal"
                         $sleep = 30
                         }
+
         'VSCode'     {
                         If(Test-IsVSCodeInstalled){
                             $ProcessPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\code.exe"
-                            $ProcessArgument="$DeploymentShare $MDTSimulatorPath\TSEnv.ps1 $DeploymentShare\Script\PSDStart.ps1 --new-window"
-
-                            #replace content with VScode process and path to TSenv.ps1
-                            ($TSConsoleScript).replace("C:\Windows\system32\WindowsPowerShell\v1.0\PowerShell.exe",$ProcessPath).replace("-noexit -noprofile -file C:\MDTSimulator\TSEnv.ps1",$ProcessArgument) |
-                                        Set-Content "$MDTSimulatorPath\OpenEditor.ps1"
+                            If($Mode -eq 'PSD'){
+                                $ProcessArgument="$DeploymentShare $MDTSimulatorPath\TSEnv.ps1 $DeploymentShare\Scripts\PSDStart.ps1 --new-window"
+                            }Else{
+                                $ProcessArgument="$DeploymentShare $MDTSimulatorPath\TSEnv.ps1 --new-window"
+                            }
 
                             #detection for process window
                             $titleName = $DeploymentShare.split('\')[-1]
                             $Window = "TSEnv.ps1 - " + $titleName +" - Visual Studio Code" + $AppendWindow
                             $sleep = 30
-                        }Else{
+                        }
+                        Else{
                             Write-host "Visual Studio Code was not found; Unable to start MDT simulator with it.`nInstall at https://code.visualstudio.com/ or run command Start-MyVSCodeInstall" -BackgroundColor Red -ForegroundColor White
                         }
-                        }
+                     }
     }
 
-    Write-Host "Copy Collected variables to MININT folder..."
+    #create OpenEditor.ps1 file
+    ('Start-Process "' + $ProcessPath +'" -ArgumentList "' + $ProcessArgument +'" -Wait') | Out-File "$MDTSimulatorPath\OpenEditor.ps1" -Force
+
+    Write-Host "Copy collected variables to MININT folder..."
     Copy-Item 'C:\MININT\SMSOSD\OSDLOGS\VARIABLES.DAT' $MDTSimulatorPath -Force -ErrorAction SilentlyContinue | Out-Null
 
     Write-Host "Building TSenv: Starting TaskSequence bootstrapper" -ForegroundColor Cyan -NoNewline
@@ -306,9 +302,6 @@ If( (Test-Path $MDTSimulatorPath) -and (Get-Module -ListAvailable -Name ZTIUtili
         Until ( $started -or ($timeout -eq 60) )
     }
 
-    #change the path to the deploymentshare back to dfault
-    #$TSStartupScript | Set-Content "$MDTSimulatorPath\TSEnv.ps1" -Force
-    $TSConsoleScript | Set-Content "$MDTSimulatorPath\OpenEditor.ps1" -Force
 }
 Else{
         Write-Host ("No MDT Simulator found in path [{0}]..." -f $MDTSimulatorPath) -ForegroundColor Red
